@@ -1,12 +1,18 @@
 
-const API_KEY = import.meta.env.VITE_OMDB_API_KEY
+async function requestMovies(params) {
+  const query = new URLSearchParams(params)
+  const response = await fetch(`/api/search?${query}`)
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.Error || 'Unable to contact the movie service.')
+  }
+
+  return data
+}
 
 export async function searchMovies(query, page = 1) {
-  const response = await fetch(
-    `https://www.omdbapi.com/?apikey=${API_KEY}&s=${encodeURIComponent(query)}&page=${page}`
-  )
-
-  const data = await response.json()
+  const data = await requestMovies({ q: query, page })
 
   if (data.Response === 'False') {
     if (data.Error === 'Movie not found!') {
@@ -20,30 +26,27 @@ export async function searchMovies(query, page = 1) {
 
   const detailedMovies = await Promise.all(
     movies.map(async (movie) => {
-      const detailResponse = await fetch(
-        `https://www.omdbapi.com/?apikey=${API_KEY}&i=${movie.imdbID}`
-      )
+      try {
+        const details = await requestMovies({ id: movie.imdbID })
 
-      const details = await detailResponse.json()
-
-      return {
-        ...movie,
-        imdbRating:
-          details.Response === 'True' && details.imdbRating !== 'N/A'
-            ? details.imdbRating
-            : 'N/A',
+        return {
+          ...movie,
+          imdbRating:
+            details.Response === 'True' && details.imdbRating !== 'N/A'
+              ? details.imdbRating
+              : 'N/A',
+        }
+      } catch {
+        return { ...movie, imdbRating: 'N/A' }
       }
     })
   )
+
   return detailedMovies
 }
 
 export async function getMovieDetails(imdbID) {
-  const response = await fetch(
-    `https://www.omdbapi.com/?apikey=${API_KEY}&i=${imdbID}&plot=full`
-  )
-
-  const data = await response.json()
+  const data = await requestMovies({ id: imdbID })
 
   if (data.Response === 'False') {
     throw new Error(data.Error || 'Unable to load movie details.')
@@ -51,4 +54,3 @@ export async function getMovieDetails(imdbID) {
 
   return data
 }
-
